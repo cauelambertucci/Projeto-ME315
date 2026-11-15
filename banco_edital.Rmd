@@ -1,0 +1,438 @@
+---
+title: "Schema, Derivadas, Avaliação e Auditoria Banco Edital"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(DBI)
+library(RSQLite)
+library(readr)
+library(dplyr)
+library(stringi)
+
+# Pasta do projeto = pasta onde este .Rmd esta salvo. Estrutura esperada:
+#   banco_edital.Rmd
+#   dados/revista.csv  dados/issn.csv  dados/percentil.csv
+#   R/funcoes_banco.R
+
+source("R/funcoes_banco.R", encoding = "UTF-8")  
+
+ARQ_BANCO <- "banco_edital.db"
+DIR_CSV   <- "dados"
+
+con <- dbConnect(RSQLite::SQLite(), dbname = ARQ_BANCO)
+dbExecute(con, "PRAGMA foreign_keys = ON;")
+```
+
+```{sql, connection=con}
+DROP VIEW IF EXISTS v_docente;
+```
+
+```{sql, connection=con}
+DROP VIEW IF EXISTS v_revista_area;
+```
+
+```{sql, connection=con}
+DROP VIEW IF EXISTS v_revista_nota;
+```
+
+```{sql, connection=con}
+DROP TABLE IF EXISTS nota_revista;
+```
+
+```{sql, connection=con}
+DROP TABLE IF EXISTS nota_revista_area;
+```
+
+```{sql, connection=con}
+DROP TABLE IF EXISTS janela;
+```
+
+```{sql, connection=con}
+DROP TABLE IF EXISTS area;
+```
+
+```{sql, connection=con}
+DROP TABLE IF EXISTS percentil;
+```
+
+```{sql, connection=con}
+DROP TABLE IF EXISTS issn;
+```
+
+```{sql, connection=con}
+DROP TABLE IF EXISTS revista;
+```
+
+```{sql, connection=con}
+DROP TABLE IF EXISTS parametro;
+```
+
+```{sql, connection=con}
+CREATE TABLE parametro (
+    chave     TEXT PRIMARY KEY,
+    valor     REAL NOT NULL,
+    descricao TEXT
+) WITHOUT ROWID;
+```
+
+```{sql, connection=con}
+INSERT INTO parametro (chave, valor, descricao) VALUES
+    ('n_anos_padrao', 4,    'Anos do periodo de analise padrao (edital: 4 anos)'),
+    ('ano_fim',       2025, 'Ultimo ano do periodo (2026 ainda esta incompleto)'),
+    ('corte_p',       0.25, 'Corte do edital: so conta p_i maior ou igual a 0,25 (escala 0 a 1)'),
+    ('meta',          1.25, 'Meta do edital: soma dos p_i validos maior ou igual a 1,25'),
+    ('max_artigos',   4,    'Quantidade maxima de artigos considerados'),
+    ('ext_parentalidade_anos', 2, 'Artigo Y: anos extras por licenca de parentalidade (50 por cento de 4 anos)'),
+    ('ext_pcd_anos',  1,    'Artigo Y: anos extras para PcD (edital diz 50 por cento mas ate 5 anos no total, pendente com o professor)');
+```
+
+```{sql, connection=con}
+CREATE TABLE revista (
+    sourceid    INTEGER PRIMARY KEY,
+    titulo      TEXT NOT NULL,
+    tipo        TEXT,
+    titulo_norm TEXT NOT NULL
+);
+```
+
+```{sql, connection=con}
+CREATE INDEX idx_revista_titulo_norm ON revista (titulo_norm);
+```
+
+```{sql, connection=con}
+CREATE TABLE issn (
+    sourceid INTEGER NOT NULL REFERENCES revista (sourceid),
+    issn     TEXT    NOT NULL CHECK (length(issn) = 8),
+    PRIMARY KEY (sourceid, issn)
+) WITHOUT ROWID;
+```
+
+```{sql, connection=con}
+CREATE INDEX idx_issn_issn ON issn (issn);
+```
+
+```{sql, connection=con}
+CREATE TABLE percentil (
+    sourceid  INTEGER NOT NULL REFERENCES revista (sourceid),
+    area      TEXT    NOT NULL,
+    ano       INTEGER NOT NULL,
+    sjr       REAL    NOT NULL,
+    rank      INTEGER NOT NULL CHECK (rank >= 1),
+    n         INTEGER NOT NULL CHECK (n >= 1),
+    percentil REAL    NOT NULL CHECK (percentil >= 0 AND percentil <= 100),
+    PRIMARY KEY (sourceid, area, ano)
+) WITHOUT ROWID;
+```
+
+## Carga dos dados
+
+```{r carga}
+# Tipos explicitos: issn como TEXTO (senao "09700358" perde o zero) e sourceid
+# como double (varios ids passam de 2^31 e as.integer() daria NA).
+revista <- read_csv(file.path(DIR_CSV, "revista.csv"),
+                    col_types = cols(sourceid = col_double(), titulo = col_character(),
+                                     tipo = col_character()),
+                    locale = locale(encoding = "UTF-8"), progress = FALSE)
+issn <- read_csv(file.path(DIR_CSV, "issn.csv"),
+                 col_types = cols(sourceid = col_double(), issn = col_character()),
+                 locale = locale(encoding = "UTF-8"), progress = FALSE)
+percentil <- read_csv(file.path(DIR_CSV, "percentil.csv"),
+                      col_types = cols(sourceid = col_double(), area = col_character(),
+                                       ano = col_integer(), sjr = col_double(),
+                                       rank = col_integer(), n = col_integer(),
+                                       percentil = col_double()),
+                      locale = locale(encoding = "UTF-8"), progress = FALSE)
+
+# Limpeza
+revista   <- revista %>% distinct(sourceid, .keep_all = TRUE) %>%
+  filter(!is.na(titulo), titulo != "") %>%
+  mutate(titulo_norm = normalizar_texto(titulo))
+issn      <- issn %>% mutate(issn = normalizar_issn(issn)) %>%
+  filter(issn != "") %>% distinct(sourceid, issn)
+percentil <- percentil %>% mutate(area = trimws(area), percentil = round(percentil, 6))
+
+# Conferencias que PARAM a execucao se algo estiver errado
+stopifnot(
+  "issn.csv tem sourceid sem revista"      = nrow(anti_join(issn, revista, by = "sourceid")) == 0,
+  "percentil.csv tem sourceid sem revista" = nrow(anti_join(distinct(percentil, sourceid), revista, by = "sourceid")) == 0,
+  "percentil.csv tem (sourceid, area, ano) repetido" = !any(duplicated(percentil[, c("sourceid", "area", "ano")])),
+  "rank fora de 1..n em percentil.csv"     = !any(percentil$rank < 1 | percentil$rank > percentil$n)
+)
+
+# integer64 grava o sourceid como INTEGER de verdade (inclusive acima de 2^31)
+i64 <- function(df) mutate(df, sourceid = bit64::as.integer64(sourceid))
+dbWithTransaction(con, {
+  dbWriteTable(con, "revista",   i64(revista[, c("sourceid", "titulo", "tipo", "titulo_norm")]), append = TRUE)
+  dbWriteTable(con, "issn",      i64(issn), append = TRUE)
+  dbWriteTable(con, "percentil", i64(percentil[, c("sourceid", "area", "ano", "sjr", "rank", "n", "percentil")]), append = TRUE)
+})
+c(revistas = nrow(revista), issns = nrow(issn), percentis = nrow(percentil))
+```
+
+## Variaveis derivadas
+
+```{sql, connection=con}
+CREATE TABLE area (
+    area       TEXT PRIMARY KEY,
+    n_revistas INTEGER NOT NULL
+) WITHOUT ROWID;
+```
+
+```{sql, connection=con}
+INSERT INTO area (area, n_revistas)
+SELECT area, COUNT(DISTINCT sourceid)
+FROM percentil
+GROUP BY area
+ORDER BY area;
+```
+
+```{sql, connection=con}
+CREATE TABLE janela (
+    n_anos  INTEGER PRIMARY KEY,
+    ano_ini INTEGER NOT NULL,
+    ano_fim INTEGER NOT NULL,
+    padrao  INTEGER NOT NULL
+);
+```
+
+```{sql, connection=con}
+INSERT INTO janela (n_anos, ano_ini, ano_fim, padrao)
+WITH RECURSIVE k (n) AS (
+    SELECT CAST(valor AS INTEGER) FROM parametro WHERE chave = 'n_anos_padrao'
+    UNION ALL
+    SELECT n + 1 FROM k
+    WHERE n + 1 <= (SELECT CAST(valor AS INTEGER) FROM parametro WHERE chave = 'ano_fim')
+                 - (SELECT MIN(ano) FROM percentil) + 1
+)
+SELECT k.n,
+       f.ano_fim - k.n + 1,
+       f.ano_fim,
+       CASE WHEN k.n = (SELECT CAST(valor AS INTEGER) FROM parametro WHERE chave = 'n_anos_padrao')
+            THEN 1 ELSE 0 END
+FROM k
+CROSS JOIN (SELECT CAST(valor AS INTEGER) AS ano_fim FROM parametro WHERE chave = 'ano_fim') f;
+```
+
+```{sql, connection=con}
+CREATE TABLE nota_revista_area (
+    sourceid          INTEGER NOT NULL REFERENCES revista (sourceid),
+    area              TEXT    NOT NULL,
+    n_anos            INTEGER NOT NULL REFERENCES janela (n_anos),
+    percentil_max     REAL    NOT NULL,
+    p                 REAL    NOT NULL,
+    ano_percentil_max INTEGER NOT NULL,
+    PRIMARY KEY (sourceid, n_anos, area)
+) WITHOUT ROWID;
+```
+
+```{sql, connection=con}
+INSERT INTO nota_revista_area (sourceid, area, n_anos, percentil_max, p, ano_percentil_max)
+SELECT sourceid, area, n_anos, percentil_max, ROUND(percentil_max / 100.0, 8), ano
+FROM (
+    SELECT p.sourceid, p.area, j.n_anos, p.percentil AS percentil_max, p.ano,
+           ROW_NUMBER() OVER (PARTITION BY p.sourceid, p.area, j.n_anos
+                              ORDER BY p.percentil DESC, p.ano DESC) AS rn
+    FROM percentil p
+    JOIN janela j ON p.ano BETWEEN j.ano_ini AND j.ano_fim
+)
+WHERE rn = 1;
+```
+
+```{sql, connection=con}
+CREATE TABLE nota_revista (
+    sourceid          INTEGER NOT NULL REFERENCES revista (sourceid),
+    n_anos            INTEGER NOT NULL REFERENCES janela (n_anos),
+    p                 REAL    NOT NULL,
+    percentil_max     REAL    NOT NULL,
+    melhor_area       TEXT,
+    ano_percentil_max INTEGER,
+    n_areas           INTEGER NOT NULL,
+    classificada      INTEGER NOT NULL,
+    conta_pontos      INTEGER NOT NULL,
+    quartil           TEXT,
+    PRIMARY KEY (sourceid, n_anos)
+) WITHOUT ROWID;
+```
+
+```{sql, connection=con}
+INSERT INTO nota_revista (sourceid, n_anos, p, percentil_max, melhor_area, ano_percentil_max,
+                          n_areas, classificada, conta_pontos, quartil)
+SELECT r.sourceid,
+       j.n_anos,
+       COALESCE(b.p, 0),
+       COALESCE(b.percentil_max, 0),
+       b.area,
+       b.ano_percentil_max,
+       COALESCE(b.n_areas, 0),
+       CASE WHEN b.sourceid IS NULL THEN 0 ELSE 1 END,
+       CASE WHEN COALESCE(b.p, 0) >= (SELECT valor FROM parametro WHERE chave = 'corte_p')
+            THEN 1 ELSE 0 END,
+       CASE WHEN b.sourceid IS NULL THEN NULL
+            WHEN b.percentil_max >= 75 THEN 'Q1'
+            WHEN b.percentil_max >= 50 THEN 'Q2'
+            WHEN b.percentil_max >= 25 THEN 'Q3'
+            ELSE 'Q4' END
+FROM revista r
+CROSS JOIN janela j
+LEFT JOIN (
+    SELECT sourceid, n_anos, area, p, percentil_max, ano_percentil_max,
+           ROW_NUMBER() OVER (PARTITION BY sourceid, n_anos ORDER BY p DESC, area) AS rn,
+           COUNT(*)     OVER (PARTITION BY sourceid, n_anos)                     AS n_areas
+    FROM nota_revista_area
+) b ON b.sourceid = r.sourceid AND b.n_anos = j.n_anos AND b.rn = 1;
+```
+
+```{sql, connection=con}
+CREATE VIEW v_revista_nota AS
+SELECT r.sourceid, r.titulo, r.titulo_norm,
+       n.n_anos, n.p, n.percentil_max, n.quartil, n.melhor_area,
+       n.ano_percentil_max, n.n_areas, n.classificada, n.conta_pontos
+FROM revista r
+JOIN nota_revista n ON n.sourceid = r.sourceid;
+```
+
+```{sql, connection=con}
+CREATE VIEW v_revista_area AS
+SELECT a.sourceid, r.titulo, a.n_anos, a.area,
+       a.percentil_max, a.p, a.ano_percentil_max,
+       CASE WHEN a.area = n.melhor_area THEN 1 ELSE 0 END AS e_melhor_area
+FROM nota_revista_area a
+JOIN revista r      ON r.sourceid = a.sourceid
+JOIN nota_revista n ON n.sourceid = a.sourceid AND n.n_anos = a.n_anos;
+```
+
+```{sql, connection=con}
+CREATE VIEW v_docente AS
+SELECT *
+FROM v_revista_nota
+WHERE n_anos = (SELECT CAST(valor AS INTEGER) FROM parametro WHERE chave = 'n_anos_padrao');
+```
+
+```{r, eval=FALSE}
+# Consulta da COMISSAO. O app troca {{N_ANOS}} por 4, 5 ou 6 e a executa (eval=FALSE: nao roda no knit).
+query_avaliar_artigos <- "
+WITH
+param AS (
+    SELECT (SELECT valor FROM parametro WHERE chave = 'corte_p')                     AS corte,
+           (SELECT valor FROM parametro WHERE chave = 'meta')                        AS meta,
+           (SELECT CAST(valor AS INTEGER) FROM parametro WHERE chave = 'max_artigos') AS max_art,
+           (SELECT ano_ini FROM janela WHERE n_anos = {{N_ANOS}})                     AS ano_ini,
+           (SELECT ano_fim FROM janela WHERE n_anos = {{N_ANOS}})                     AS ano_fim
+),
+cand AS (
+    SELECT a.id_artigo, i.sourceid, 'issn' AS metodo, 1 AS prioridade
+    FROM tmp_artigo a
+    JOIN issn i ON i.issn = a.issn_norm
+    UNION ALL
+    SELECT a.id_artigo, r.sourceid, 'titulo', 2
+    FROM tmp_artigo a
+    JOIN revista r ON r.titulo_norm = a.revista_norm
+    WHERE a.revista_norm <> ''
+),
+melhor AS (
+    SELECT id_artigo, sourceid, metodo,
+           ROW_NUMBER() OVER (PARTITION BY id_artigo ORDER BY prioridade, sourceid)  AS rn,
+           COUNT(*)     OVER (PARTITION BY id_artigo, prioridade)                    AS n_cand
+    FROM cand
+),
+base AS (
+    SELECT a.id_artigo, a.titulo, a.ano, a.revista,
+           m.sourceid,
+           COALESCE(m.metodo, 'sem_match')  AS metodo,
+           COALESCE(m.n_cand, 0)            AS n_candidatos,
+           COALESCE(n.p, 0)                 AS p,
+           n.percentil_max, n.melhor_area, n.quartil,
+           CASE WHEN a.ano BETWEEN pr.ano_ini AND pr.ano_fim THEN 1 ELSE 0 END AS no_periodo,
+           pr.corte, pr.meta, pr.max_art, pr.ano_ini, pr.ano_fim
+    FROM tmp_artigo a
+    CROSS JOIN param pr
+    LEFT JOIN melhor m       ON m.id_artigo = a.id_artigo AND m.rn = 1
+    LEFT JOIN nota_revista n ON n.sourceid = m.sourceid AND n.n_anos = {{N_ANOS}}
+),
+ordenado AS (
+    SELECT b.*,
+           ROW_NUMBER() OVER (PARTITION BY no_periodo
+                              ORDER BY p DESC, ano DESC, id_artigo) AS rn_periodo
+    FROM base b
+),
+marcado AS (
+    SELECT o.*,
+           CASE WHEN no_periodo = 1 THEN rn_periodo END AS pos,
+           CASE WHEN no_periodo = 1 AND rn_periodo <= max_art THEN 1 ELSE 0 END AS selecionado
+    FROM ordenado o
+),
+pontuado AS (
+    SELECT m.*,
+           CASE WHEN selecionado = 1 AND p >= corte THEN p ELSE 0 END AS pontos
+    FROM marcado m
+)
+SELECT id_artigo, titulo, ano, revista, sourceid, metodo, n_candidatos,
+       melhor_area, quartil,
+       ROUND(percentil_max, 2) AS percentil_max,
+       p, no_periodo, pos, selecionado, pontos,
+       CASE WHEN no_periodo = 0 THEN 'fora_do_periodo'
+            WHEN selecionado = 1 THEN 'selecionado'
+            ELSE 'nao_selecionado' END AS situacao,
+       ROUND(SUM(pontos) OVER (), 6) AS soma,
+       meta,
+       CASE WHEN ROUND(SUM(pontos) OVER (), 6) >= meta THEN 1 ELSE 0 END AS aprovado,
+       ano_ini, ano_fim
+FROM pontuado
+ORDER BY selecionado DESC, pos, no_periodo DESC, p DESC, id_artigo
+"
+```
+
+```{sql, connection=con}
+SELECT 'revistas' AS item, COUNT(*) AS valor, 0 AS deve_ser_zero FROM revista
+UNION ALL SELECT 'issns',      COUNT(*), 0 FROM issn
+UNION ALL SELECT 'percentis',  COUNT(*), 0 FROM percentil
+UNION ALL SELECT 'areas',      COUNT(*), 0 FROM area
+UNION ALL SELECT 'janelas',    COUNT(*), 0 FROM janela
+UNION ALL SELECT 'nota_revista_area (linhas)', COUNT(*), 0 FROM nota_revista_area
+UNION ALL SELECT 'nota_revista (linhas)',      COUNT(*), 0 FROM nota_revista
+UNION ALL SELECT 'info: revistas sem nenhum percentil', COUNT(*), 0
+    FROM revista r WHERE NOT EXISTS (SELECT 1 FROM percentil p WHERE p.sourceid = r.sourceid)
+UNION ALL SELECT 'info: ISSN ligado a mais de uma revista', COUNT(*), 0
+    FROM (SELECT issn FROM issn GROUP BY issn HAVING COUNT(DISTINCT sourceid) > 1)
+UNION ALL SELECT 'info: titulos normalizados repetidos', COUNT(*), 0
+    FROM (SELECT titulo_norm FROM revista GROUP BY titulo_norm HAVING COUNT(*) > 1)
+UNION ALL SELECT 'ERRO: issn sem revista', COUNT(*), 1
+    FROM issn i LEFT JOIN revista r ON r.sourceid = i.sourceid WHERE r.sourceid IS NULL
+UNION ALL SELECT 'ERRO: percentil sem revista', COUNT(*), 1
+    FROM percentil p LEFT JOIN revista r ON r.sourceid = p.sourceid WHERE r.sourceid IS NULL
+UNION ALL SELECT 'ERRO: rank 1 com percentil diferente de 100', COUNT(*), 1
+    FROM percentil WHERE rank = 1 AND ABS(percentil - 100) > 0.000002
+UNION ALL SELECT 'ERRO: percentil diferente da formula', COUNT(*), 1
+    FROM percentil WHERE ABS(percentil - (n - rank + 1) * 100.0 / n) > 0.000002
+UNION ALL SELECT 'ERRO: ano_fim sem nenhum dado', CASE WHEN COUNT(*) = 0 THEN 1 ELSE 0 END, 1
+    FROM percentil WHERE ano = (SELECT CAST(valor AS INTEGER) FROM parametro WHERE chave = 'ano_fim')
+UNION ALL SELECT 'ERRO: nota_revista com linhas faltando',
+    (SELECT COUNT(*) FROM revista) * (SELECT COUNT(*) FROM janela) - (SELECT COUNT(*) FROM nota_revista), 1
+UNION ALL SELECT 'ERRO: classificada sem melhor_area', COUNT(*), 1
+    FROM nota_revista WHERE classificada = 1 AND melhor_area IS NULL
+UNION ALL SELECT 'ERRO: p fora de 0 a 1', COUNT(*), 1
+    FROM nota_revista WHERE p < 0 OR p > 1;
+```
+
+## Conferencia final
+
+```{r conferencia}
+dbListTables(con)
+dbGetQuery(con, "SELECT name AS views FROM sqlite_master WHERE type = 'view' ORDER BY name")
+
+chk <- dbGetQuery(con, "
+  SELECT 'issn sem revista' AS item, COUNT(*) AS valor FROM issn i LEFT JOIN revista r ON r.sourceid = i.sourceid WHERE r.sourceid IS NULL
+  UNION ALL SELECT 'percentil sem revista', COUNT(*) FROM percentil p LEFT JOIN revista r ON r.sourceid = p.sourceid WHERE r.sourceid IS NULL
+  UNION ALL SELECT 'rank 1 com percentil diferente de 100', COUNT(*) FROM percentil WHERE rank = 1 AND ABS(percentil - 100) > 0.000002
+  UNION ALL SELECT 'percentil diferente da formula', COUNT(*) FROM percentil WHERE ABS(percentil - (n - rank + 1) * 100.0 / n) > 0.000002
+  UNION ALL SELECT 'nota_revista com linhas faltando', (SELECT COUNT(*) FROM revista) * (SELECT COUNT(*) FROM janela) - (SELECT COUNT(*) FROM nota_revista)
+  UNION ALL SELECT 'classificada sem melhor_area', COUNT(*) FROM nota_revista WHERE classificada = 1 AND melhor_area IS NULL
+  UNION ALL SELECT 'p fora de 0 a 1', COUNT(*) FROM nota_revista WHERE p < 0 OR p > 1")
+chk
+stopifnot("Auditoria reprovou: veja a tabela acima" = all(chk$valor == 0))
+```
+
+```{r desconectar}
+dbDisconnect(con)
+```

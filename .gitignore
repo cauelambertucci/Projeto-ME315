@@ -1,0 +1,18 @@
+# Bancos gerados (nao versionar)
+banco_edital.db
+banco_edital.html
+banco_edital.md
+app.db
+app.db-wal
+app.db-shm
+*.db-journal
+
+# Credenciais de demonstracao (ficam FORA do repositorio; isto e so prevencao)
+credenciais*.csv
+.ppge/
+
+# R / RStudio / deploy
+.Rhistory
+.RData
+.Rproj.user/
+rsconnect/
