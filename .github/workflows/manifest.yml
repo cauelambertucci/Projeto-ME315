@@ -51,6 +51,9 @@ jobs:
             any::knitr
             any::rmarkdown
             any::rsconnect
+            any::cpp11
+            any::progress
+            any::dbplyr
 
       - name: Escrever manifest.json
         run: |
