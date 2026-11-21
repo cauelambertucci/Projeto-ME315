@@ -98,7 +98,7 @@ fmt_data <- function(x) {
 
 ROTULO_STATUS <- c(rascunho = "Rascunho", enviada = "Enviada", avaliada = "Avaliada")
 ROTULO_LICENCA <- c(parentalidade = "Parentalidade", medica = "Licença médica", pcd = "PcD")
-ROTULO_METODO <- c(issn = "casada por ISSN", titulo = "casada pelo título", manual = "confirmada pelo docente",
+ROTULO_METODO <- c(issn = "casada por ISSN", titulo = "casada pelo título", manual = "escolhida por você",
                    sem_match = "não encontrada no SJR")
 
 badge_status <- function(st) {

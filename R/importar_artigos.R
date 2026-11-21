@@ -1,6 +1,6 @@
 # =====================================================================
-# importar_artigos.R  -  Leitores de artigos (lista colada, CSV, Lattes XML)
-# Todos devolvem o CONTRATO de preparar_artigos():
+# importar_artigos.R  -  Leitor do curriculo Lattes (.zip ou .xml)
+# Devolve o CONTRATO de preparar_artigos():
 #   data.frame(titulo, ano, revista, issn)  (texto; ano como texto/numero)
 # =====================================================================
 
@@ -22,31 +22,6 @@ padronizar_colunas <- function(df) {
   df <- df[, c("titulo", "ano", "revista", "issn")]
   df[] <- lapply(df, function(x) { x <- as.character(x); x[is.na(x)] <- ""; trimws(x) })
   df[nzchar(df$titulo), , drop = FALSE]
-}
-
-# Uma linha por artigo: "Titulo; Ano; Revista; ISSN"  (separador ; ou TAB ou |)
-ler_lista_colada <- function(texto) {
-  linhas <- trimws(strsplit(texto %||% "", "\r?\n")[[1]])
-  linhas <- linhas[nzchar(linhas)]
-  if (!length(linhas)) return(.vazio_artigos())
-  partes <- lapply(linhas, function(l) {
-    sep <- if (grepl("\t", l)) "\t" else if (grepl(";", l)) ";" else "|"
-    p <- trimws(strsplit(l, sep, fixed = TRUE)[[1]]); length(p) <- 4; p
-  })
-  df <- as.data.frame(do.call(rbind, partes), stringsAsFactors = FALSE)
-  names(df) <- c("titulo", "ano", "revista", "issn")
-  if (normalizar_texto(df$titulo[1]) %in% c("titulo", "title")) df <- df[-1, , drop = FALSE]
-  padronizar_colunas(df)
-}
-
-# CSV com cabecalho (titulo, ano, revista, issn). Detecta ; ou , ; UTF-8 com ou sem BOM.
-ler_csv_artigos <- function(caminho) {
-  primeira <- readLines(caminho, n = 1, warn = FALSE, encoding = "UTF-8")
-  sep <- if (lengths(regmatches(primeira, gregexpr(";", primeira))) >=
-             lengths(regmatches(primeira, gregexpr(",", primeira)))) ";" else ","
-  df <- utils::read.csv(caminho, sep = sep, colClasses = "character", fileEncoding = "UTF-8-BOM",
-                        check.names = FALSE, stringsAsFactors = FALSE)
-  padronizar_colunas(df)
 }
 
 # ---------------------------------------------------------------------

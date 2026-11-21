@@ -95,7 +95,7 @@ chk("sem artigos não quebra",
 
 dbDisconnect(con)
 
-# Testes do app (app.db, CRUD e retrato de avaliacao)
-source("R/testar_app.R", encoding = "UTF-8")
+# Testes da leitura do Lattes e da avaliacao em memoria
+source("R/testar_lattes.R", encoding = "UTF-8")
 
 message("\nTODOS OS TESTES PASSARAM")

@@ -1,0 +1,48 @@
+# Roda os testes sobre o banco_edital.db REAL (baixado do Drive pelo link compartilhado,
+# ou gerado pelo Knit se dados/*.csv estiverem no repositório).
+name: Testes
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["app.R", "R/**", "banco_edital.Rmd", ".github/workflows/testes.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::shiny
+            any::bslib
+            any::DT
+            any::DBI
+            any::RSQLite
+            any::xml2
+            any::stringi
+            any::bit64
+            any::readr
+            any::dplyr
+            any::knitr
+      - name: Obter banco_edital.db
+        run: Rscript -e 'source("R/bootstrap.R"); preparar_banco()' && ls -lh banco_edital.db
+      - name: Testes
+        run: Rscript -e 'source("R/testar_artigo_y.R")'
+      - name: App inicia
+        run: |
+          Rscript -e 'shiny::runApp(".", port = 3838, launch.browser = FALSE)' > app.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:3838/ > /dev/null && break; sleep 2; done
+          curl -sf http://127.0.0.1:3838/ | grep -q "Avaliar meu Lattes" && echo "app respondeu" || { cat app.log; exit 1; }

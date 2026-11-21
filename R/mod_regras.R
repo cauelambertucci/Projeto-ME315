@@ -12,9 +12,9 @@ PENDENCIAS <- list(
   list(t = "4. Só conta artigo publicado dentro da janela",
        x = "Artigos com ano fora do período aparecem como “fora do período” e não entram no top 4."),
   list(t = "5. Como o artigo é ligado à revista",
-       x = "Primeiro pelo ISSN; se não achar, pelo nome da revista normalizado (sem acento, minúsculo) e idêntico. Se um ISSN ou nome corresponder a mais de uma revista, o cálculo usa a de menor código e avisa. Nesta demo, quando o docente confirma a revista certa, a escolha dele passa a valer no cálculo — confirmar se a comissão concorda."),
+       x = "Primeiro pelo ISSN; se não achar, pelo nome da revista normalizado (sem acento, minúsculo) e idêntico. Se um ISSN ou nome corresponder a mais de uma revista, o cálculo usa a de menor código e avisa. Quando o docente escolhe a revista certa na tela, a escolha dele passa a valer no cálculo — confirmar se a comissão concorda."),
   list(t = "6. Qual é o “último ano” da janela",
-       x = "O ano final está fixo em 2025 (último ano completo do SJR). Hoje é 2026, e “quatro anos antes da solicitação” pode ser lido como 2022–2025 ou 2023–2026. A demo usa 2022–2025 e grava o ano final em cada solicitação.")
+       x = "O ano final está fixo em 2025 (último ano completo do SJR). Hoje é 2026, e “quatro anos antes da solicitação” pode ser lido como 2022–2025 ou 2023–2026. O sistema usa 2022–2025.")
 )
 
 regras_ui <- function(id) {
@@ -34,16 +34,16 @@ regras_ui <- function(id) {
             "e o ", shiny::strong("p"), " de 0 a 1 (ex.: 0,62). Corte (0,25) e meta (1,25) estão na escala de p."))),
       bslib::card(bslib::card_header("Parâmetros em uso (banco_edital.db)"),
         bslib::card_body(shiny::uiOutput(ns("params")))),
-      bslib::card(bslib::card_header("Classificação nas telas da comissão"),
+      bslib::card(bslib::card_header("Como ler o resultado"),
         bslib::card_body(shiny::tags$ul(class = "mb-0",
           shiny::tags$li(badge_situacao("apto"), " soma ≥ 1,25"),
           shiny::tags$li(badge_situacao("quase apto"), " soma entre 1,00 e 1,25 (só informativo)"),
           shiny::tags$li(badge_situacao("não apto"), " soma < 1,00")))),
-      bslib::card(bslib::card_header("Sobre esta demonstração"),
+      bslib::card(bslib::card_header("Privacidade"),
         bslib::card_body(class = "small",
-          shiny::p("Todos os docentes, artigos e licenças são fictícios. As revistas e percentis vêm do SJR (Scimago)."),
-          shiny::p(class = "mb-0", "Cada avaliação é gravada como um retrato: se o SJR for atualizado, ",
-                   "os resultados antigos não mudam sozinhos.")))),
+          shiny::p("O currículo enviado é lido na hora e descartado; nada é gravado no servidor. ",
+                   "As revistas e percentis vêm do SJR (Scimago)."),
+          shiny::p(class = "mb-0", "O resultado é uma simulação das regras do edital; a decisão é da comissão.")))),
     bslib::card(bslib::card_header(shiny::icon("triangle-exclamation"), " Decisões pendentes (confirmar com o professor)"),
       bslib::card_body(
         shiny::p(class = "small-muted", "O sistema funciona com as premissas abaixo, mas elas ainda não foram confirmadas."),

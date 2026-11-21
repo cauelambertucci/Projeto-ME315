@@ -1,7 +1,6 @@
 # =====================================================================
-# mod_avaliacao.R  -  Visao de UM retrato de avaliacao
-# Usada pelo docente (editavel: pode confirmar revista ambigua) e pela
-# comissao (somente leitura). Mostra SEMPRE o retrato gravado, sem recalcular.
+# mod_avaliacao.R  -  Mostra o resultado de avaliar_lattes(): medidor,
+# cartoes dos artigos, periodo (Artigo Y) e confirmacao de revista ambigua.
 # =====================================================================
 
 avaliacao_ui <- function(id) {
@@ -9,9 +8,9 @@ avaliacao_ui <- function(id) {
   shiny::uiOutput(ns("corpo"))
 }
 
-# retrato: reactive com a saida de obter_retrato() (ou NULL)
-# editavel: reactive logico
-# ctx: list(con_sjr, con_app, ao_confirmar = function(artigo_id, sourceid))
+# retrato: reactive com a saida de avaliar_lattes() (ou NULL)
+# editavel: reactive logico (mostra o seletor de revista ambigua)
+# ctx: list(con_sjr, ao_confirmar = function(artigo_id, sourceid))
 avaliacao_server <- function(id, ctx, retrato, editavel = shiny::reactive(FALSE)) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -20,17 +19,15 @@ avaliacao_server <- function(id, ctx, retrato, editavel = shiny::reactive(FALSE)
       r <- retrato()
       if (is.null(r)) {
         return(bslib::card(bslib::card_body(
-          shiny::p(shiny::icon("circle-info"), " Ainda não há avaliação calculada para esta solicitação."),
-          shiny::p(class = "small-muted", "Cadastre os artigos e, se for o caso, as licenças (Artigo Y); depois clique em ",
-                   shiny::strong("Calcular avaliação"), "."))))
+          shiny::p(shiny::icon("circle-info"), " O resultado aparece aqui."),
+          shiny::p(class = "small-muted", "Envie o currículo, confira os artigos e, se for o caso, as licenças (Artigo Y); ",
+                   "depois clique em ", shiny::strong("Calcular avaliação"), "."))))
       }
       det <- r$detalhe
       res <- r$resumo
       per <- r$periodo
       cab <- shiny::div(class = "small-muted mb-2",
-        shiny::icon("camera"), sprintf(" Retrato calculado em %s", fmt_data_hora(r$calculada_em)),
-        if (isTRUE(r$oficial)) shiny::span(class = "badge text-bg-primary ms-1", "Avaliação oficial da comissão"),
-        shiny::br(),
+        sprintf("Calculado em %s", fmt_data_hora(r$calculada_em)), shiny::br(),
         sprintf("Janela de análise: %d–%d (%d anos)", per$ano_ini, per$ano_fim, per$n_anos),
         " · Base: ", r$versao_banco)
 
@@ -66,7 +63,7 @@ avaliacao_server <- function(id, ctx, retrato, editavel = shiny::reactive(FALSE)
             bslib::card_header("Resultado"),
             bslib::card_body(cab, medidor_soma(res$soma, res$meta),
               shiny::div(class = "small-muted",
-                sprintf("%d artigo(s) cadastrados · %d no período · %d selecionados (até 4) · %d sem revista no SJR",
+                sprintf("%d artigo(s) avaliados · %d no período · %d selecionados (até 4) · %d sem revista no SJR",
                         res$n_artigos_lattes, res$n_no_periodo, res$n_selecionados, res$n_sem_revista)),
               alertas)),
           bslib::card(
@@ -84,9 +81,7 @@ avaliacao_server <- function(id, ctx, retrato, editavel = shiny::reactive(FALSE)
             bslib::card(bslib::card_header("Licenças informadas"),
               bslib::card_body(
                 if (is.data.frame(lic) && nrow(lic)) tabela_html(data.frame(
-                  Tipo = unname(ROTULO_LICENCA[lic$tipo]), `Início` = fmt_data(lic$data_inicio),
-                  Fim = ifelse(is.na(lic$data_fim), "–", fmt_data(lic$data_fim)),
-                  `Comprovação` = ifelse(is.na(lic$observacao), "–", lic$observacao), check.names = FALSE))
+                  `Situação` = lic$situacao, Informado = lic$informado, check.names = FALSE))
                 else shiny::p(class = "small-muted", "Nenhuma licença informada."))))
         )
       )
@@ -104,14 +99,14 @@ avaliacao_server <- function(id, ctx, retrato, editavel = shiny::reactive(FALSE)
                     ns("confirmar"), as.integer(d$artigo_id), sel_id)
       shiny::div(class = "alert alert-warning", role = "alert",
         shiny::strong(shiny::icon("code-fork"), sprintf(" O ISSN/título de \"%s\" corresponde a %d revistas.", d$titulo, d$n_candidatos)),
-        shiny::p(class = "mb-2 small", "O cálculo usou a de menor código (sourceid). Confirme qual é a revista certa."),
+        shiny::p(class = "mb-2 small", "O cálculo usou a de menor código (sourceid). Escolha a revista certa e recalcule."),
         if (isTRUE(editavel())) shiny::div(class = "d-flex flex-wrap gap-2 align-items-end",
           shiny::div(class = "flex-grow-1",
             shiny::tags$label(`for` = sel_id, class = "form-label small mb-1", "Revista em que o artigo foi publicado"),
             shiny::tags$select(id = sel_id, class = "form-select form-select-sm", opcoes)),
           shiny::tags$button(type = "button", class = "btn btn-sm btn-primary", onclick = js,
                              shiny::icon("check"), " Confirmar revista"))
-        else shiny::p(class = "small mb-0", "Somente o docente pode confirmar (solicitação em rascunho).")
+        else NULL
       )
     }
 

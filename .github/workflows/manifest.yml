@@ -36,13 +36,8 @@ jobs:
             any::shiny
             any::bslib
             any::DT
-            any::shinymanager
             any::DBI
             any::RSQLite
-            any::jsonlite
-            any::scrypt
-            any::ggplot2
-            any::gridExtra
             any::xml2
             any::stringi
             any::bit64

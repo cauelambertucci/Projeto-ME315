@@ -1,11 +1,6 @@
 # Dicionário dos bancos (ME315)
 
-Dois bancos SQLite, **separados**:
-
-| Banco | Para quê | Acesso no app | Versionado? |
-|---|---|---|---|
-| `banco_edital.db` | SJR (revistas, ISSN, percentis) + regras do edital | **somente leitura** (`conectar_banco()`) | não (gerado pelo Knit) |
-| `app.db` | credenciamento: usuários, docentes, solicitações, licenças, artigos, retratos de avaliação | leitura e escrita (`abrir_app_db()`) | não (gerado por `R/semear_demo.R`) |
+Um banco SQLite, `banco_edital.db` (SJR + regras do edital), aberto **somente leitura** com `conectar_banco()`. Não é versionado: é gerado pelo Knit do `banco_edital.Rmd` ou baixado do Drive pelo `R/bootstrap.R`.
 
 ---
 
@@ -120,27 +115,12 @@ Parentalidade +2 anos **por licença**; PcD +1 ano (uma vez); licença médica +
 
 ---
 
-## Parte 2 — `app.db` (banco de credenciamento, gravável)
+## Parte 2 — O app (sem banco próprio)
 
-Criado por `abrir_app_db()` (`R/banco_app.R`) com `CREATE TABLE IF NOT EXISTS`. Sempre com `PRAGMA foreign_keys = ON`, `busy_timeout` e `journal_mode = WAL`. Caminho: `Sys.getenv("PPGE_APP_DB", "app.db")`.
+O app não grava nada: não há login nem banco de credenciamento. O fluxo é todo em memória:
 
-| Tabela | Colunas | Regras |
-|---|---|---|
-| `docente` | `id`, `nome`, `lattes_id` (NULL), `area_atuacao`, `criado_em` | nome não vazio |
-| `usuario` | `id`, `login` (único), `senha_hash` (scrypt), `papel`, `docente_id` (NULL) | `papel IN ('docente','comissao')`; docente exige `docente_id`; FK → `docente` (cascata) |
-| `solicitacao` | `id`, `docente_id`, `data_pedido`, `status`, `ano_fim_base` | `status IN ('rascunho','enviada','avaliada')`; FK → `docente` (cascata) |
-| `licenca` | `id`, `solicitacao_id`, `tipo`, `data_inicio`, `data_fim`, `observacao` | `tipo IN ('parentalidade','medica','pcd')`; `data_fim` obrigatória exceto PcD; fim ≥ início; comprovação = texto |
-| `artigo` | `id`, `solicitacao_id`, `titulo`, `titulo_norm`, `ano`, `revista_digitada`, `issn`, `sourceid` (NULL), `confirmado_manual` (0/1) | `UNIQUE(solicitacao_id, titulo_norm, ano)` = regra de duplicata do `preparar_artigos()` |
-| `avaliacao` | `id`, `solicitacao_id`, `calculada_em`, `n_anos`, `ano_ini`, `ano_fim`, `soma`, `meta`, `aprovado`, `versao_banco`, `detalhe_json`, `oficial` (0/1) | **retrato imutável** (trigger bloqueia `UPDATE`) |
+1. `ler_lattes_xml(caminho)` (`R/importar_artigos.R`) abre o `.zip` ou `.xml` da Plataforma Lattes (ISO-8859-1), lê só `PRODUCAO-BIBLIOGRAFICA/ARTIGOS-PUBLICADOS/ARTIGO-PUBLICADO` e devolve o contrato `titulo, ano, revista, issn` (com `attr(, "docente")`: nome, ID Lattes, data de atualização). Tolera `&` sem escape.
+2. `previsualizar_artigos(con, df, n_anos)` mostra, para cada artigo, se a revista foi achada no SJR (ISSN, depois título) e o p.
+3. `avaliar_lattes(con, artigos, n_parentalidade, pcd, meses_medica, sourceid_conf)` (`R/avaliacao.R`) calcula a janela com `calcular_periodo()`, chama `avaliar_artigos()` (via `avaliar_artigos_app()`, que respeita a revista escolhida pelo docente) e devolve `periodo`, `resumo`, `detalhe` por artigo (com `revista_sjr`, `ano_percentil_max`, `motivo`, `explicacao`) e as notas por área.
 
-Índices: `usuario(docente_id)`, `solicitacao(docente_id)`, `licenca(solicitacao_id)`, `artigo(solicitacao_id)`, `avaliacao(solicitacao_id, calculada_em)`.
-
-**Fluxo de status:** rascunho → enviada (docente) → avaliada (comissão). A comissão pode devolver (enviada → rascunho) ou reabrir (avaliada → enviada). Só rascunho aceita mudanças em artigos e licenças.
-
-**Retrato (`avaliacao.detalhe_json`):** JSON com tudo o que foi visto no cálculo — parâmetros, período (tabela motivo/anos, avisos, entradas), licenças, resumo, detalhe por artigo (com `revista_sjr`, `ano_percentil_max`, `motivo`, `explicacao`) e notas por área de cada revista casada, além de `versao_banco` (`SJR 2020-2025 | N revistas | md5 …`). Ler com `obter_retrato()` **não** consulta o `banco_edital.db`: o histórico não muda quando o SJR for atualizado.
-
-**Avaliação de uma solicitação** (`avaliar_solicitacao(con_app, con_sjr, id)`): lê artigos e licenças → `resumo_licencas()` (meses de licença médica via `meses_entre_datas`) → `calcular_periodo()` → `avaliar_artigos()` → enriquece → grava o retrato.
-
-**Confirmação manual de revista:** quando `n_candidatos > 1`, o docente escolhe a revista; `confirmar_revista()` grava `sourceid` e `confirmado_manual = 1`. Com `USAR_CONFIRMACAO_MANUAL = TRUE` (padrão, em `R/banco_app.R`), o cálculo usa essa revista (método `manual`) antes do ISSN e do título; para isso `avaliar_artigos_app()` reaproveita a própria `avaliar_artigos()` com um ramo extra na consulta. **Decisão pendente** (ver tela "Regras e premissas").
-
-Principais funções: `criar_docente`, `criar_usuario`, `autenticar_usuario`, `criar_solicitacao`, `listar_solicitacoes`, `mudar_status`, `adicionar_licenca`, `listar_licencas`, `adicionar_artigo(s)`, `listar_artigos`, `confirmar_revista`, `candidatos_revista`, `avaliar_solicitacao`, `listar_avaliacoes`, `obter_retrato`, `ultimo_retrato`, `situacao_soma`.
+**Revista ambígua:** quando `n_candidatos > 1`, o resultado mostra um seletor; a escolha vira `sourceid_conf` e o artigo passa a ser casado pelo método `manual` (prioridade sobre ISSN e título). Decisão pendente, sinalizada em "Regras e premissas".
