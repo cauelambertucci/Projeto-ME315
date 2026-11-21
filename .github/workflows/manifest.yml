@@ -62,6 +62,7 @@ jobs:
             arquivos <- setdiff(arquivos, c("R/testar_artigo_y.R", "R/testar_app.R"))
             rsconnect::writeManifest(appDir = ".", appFiles = arquivos)
           '
+          python3 .github/corrigir_manifest.py
           head -c 400 manifest.json
 
       - name: Commit do manifest.json

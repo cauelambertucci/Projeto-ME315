@@ -49,8 +49,8 @@
       }
     },
     "DT": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Type": "Package",
         "Package": "DT",
@@ -239,8 +239,8 @@
       }
     },
     "RSQLite": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Package": "RSQLite",
         "Title": "SQLite Interface for R",
@@ -482,8 +482,8 @@
       }
     },
     "bit64": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Package": "bit64",
         "Title": "A S3 Class for Vectors of 64bit Integers",
@@ -828,8 +828,8 @@
       }
     },
     "dbplyr": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Type": "Package",
         "Package": "dbplyr",
@@ -900,8 +900,8 @@
       }
     },
     "dplyr": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Type": "Package",
         "Package": "dplyr",
@@ -1218,8 +1218,8 @@
       }
     },
     "gridExtra": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Package": "gridExtra",
         "Authors@R": "c(person(\"Baptiste\", \"Auguie\",\n    email = \"baptiste.auguie@vuw.ac.nz\",\n    role = c(\"aut\", \"cre\")), person(\"Anton\", \"Antonov\",\n    email = \"tonytonov@gmail.com\",\n    role = c(\"ctb\")))",
@@ -1562,8 +1562,8 @@
       }
     },
     "knitr": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Package": "knitr",
         "Type": "Package",
@@ -1997,8 +1997,8 @@
       }
     },
     "progress": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Package": "progress",
         "Title": "Terminal Progress Bars",
@@ -2144,8 +2144,8 @@
       }
     },
     "readr": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Package": "readr",
         "Title": "Read Rectangular Text Data",
@@ -2329,8 +2329,8 @@
       }
     },
     "scrypt": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Package": "scrypt",
         "Type": "Package",
@@ -2361,8 +2361,8 @@
       }
     },
     "shiny": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Type": "Package",
         "Package": "shiny",
@@ -2397,8 +2397,8 @@
       }
     },
     "shinymanager": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Package": "shinymanager",
         "Title": "Authentication Management for 'Shiny' Applications",
@@ -2459,8 +2459,8 @@
       }
     },
     "stringi": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Package": "stringi",
         "Version": "1.8.9",
@@ -2962,8 +2962,8 @@
       }
     },
     "xml2": {
-      "Source": "any",
-      "Repository": "RSPM",
+      "Source": "RSPM",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Package": "xml2",
         "Title": "Parse XML",
