@@ -49,12 +49,14 @@ jobs:
             any::readr
             any::dplyr
             any::knitr
+            any::rmarkdown
             any::rsconnect
 
       - name: Escrever manifest.json
         run: |
           Rscript -e '
             arquivos <- c("app.R", "banco_edital.Rmd", list.files("R", pattern = "\\.R$", full.names = TRUE))
+            arquivos <- setdiff(arquivos, c("R/testar_artigo_y.R", "R/testar_app.R"))
             rsconnect::writeManifest(appDir = ".", appFiles = arquivos)
           '
           head -c 400 manifest.json
