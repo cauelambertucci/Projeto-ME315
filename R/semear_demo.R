@@ -70,7 +70,7 @@ sortear_revistas <- function(sjr) {
     media  = faixa(base$c4 == 1 & base$p4 >= 0.45 & base$p4 <= 0.70, 12),
     baixa  = faixa(base$c4 == 1 & base$p4 >= 0.25 & base$p4 <= 0.40, 8),
     abaixo = faixa(base$c4 == 1 & base$p4 > 0 & base$p4 < 0.25, 6),
-    sem    = faixa(base$c6 == 0, 2),
+    sem    = if (sum(base$c6 == 0) >= 1) faixa(base$c6 == 0, 1) else NULL,   # pode nao existir na base real
     antiga = if (any(base$c4 == 0 & base$c6 == 1)) faixa(base$c4 == 0 & base$c6 == 1, 1) else NULL,
     issn_ambiguo = if (nrow(amb)) amb$issn[sample(nrow(amb), 1)] else NA_character_
   )
@@ -102,7 +102,11 @@ semear_demo <- function(app, sjr, credenciais = caminho_credenciais(), semente =
   # senhas: reaproveita o arquivo, se existir
   cred <- if (file.exists(credenciais)) utils::read.csv(credenciais, stringsAsFactors = FALSE) else
     data.frame(login = character(0), senha = character(0), papel = character(0))
+  # PPGE_SENHA_DEMO (ex.: segredo do GitHub Actions) = mesma senha para todos os logins
+  senha_unica <- Sys.getenv("PPGE_SENHA_DEMO", "")
+  if (nzchar(senha_unica) && nchar(senha_unica) < 8) stop("PPGE_SENHA_DEMO precisa de 8+ caracteres.")
   senha_de <- function(login) {
+    if (nzchar(senha_unica)) return(senha_unica)
     s <- cred$senha[cred$login == login]
     if (length(s)) s[1] else gerar_senha()
   }
@@ -177,7 +181,8 @@ semear_demo <- function(app, sjr, credenciais = caminho_credenciais(), semente =
 
   # 07 Revista sem classificacao + revista que nao existe no SJR
   s <- sol("docente07", "2026-07-07")
-  art(s, r("sem", 1), y(1)); art(s, r("media", 9), y(2))
+  if (!is.null(rv$sem)) art(s, r("sem", 1), y(1))
+  art(s, r("media", 9), y(2))
   adicionar_artigo(app, s, titulo_ficticio(), y(0), revista = "Revista Inexistente de Estudos Fictícios", issn = "")
   aval(s)
 

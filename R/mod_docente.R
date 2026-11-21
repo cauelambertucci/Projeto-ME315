@@ -122,12 +122,22 @@ doc_artigos_ui <- function(id) {
         shiny::fileInput(ns("csv"), NULL, accept = c(".csv", "text/csv"), buttonLabel = "Escolher CSV...",
                          placeholder = "nenhum arquivo"),
         shiny::actionButton(ns("csv_add"), "Importar CSV", icon = shiny::icon("file-import"), class = "btn-primary")),
-      bslib::nav_panel("Currículo Lattes (XML)", icon = shiny::icon("file-code"),
-        shiny::p(class = "small-muted", "Exporte o currículo em XML na Plataforma Lattes e envie aqui. ",
-                 "São lidos os artigos publicados (título, ano, revista e ISSN)."),
-        shiny::fileInput(ns("xml"), NULL, accept = c(".xml", ".zip"), buttonLabel = "Escolher XML...",
-                         placeholder = "nenhum arquivo"),
-        shiny::actionButton(ns("xml_add"), "Importar do Lattes", icon = shiny::icon("file-import"), class = "btn-primary"))
+      bslib::nav_panel("Currículo Lattes", icon = shiny::icon("file-code"),
+        shiny::tags$ol(class = "small mb-2",
+          shiny::tags$li("Abra seu currículo em ", shiny::tags$a(href = "https://lattes.cnpq.br", target = "_blank",
+                         rel = "noopener", "lattes.cnpq.br"), " (Atualizar currículo)."),
+          shiny::tags$li("No menu, use ", shiny::strong("Exportar"), " e escolha o formato ", shiny::strong("XML"),
+                         ". O navegador baixa um arquivo .zip."),
+          shiny::tags$li("Envie o .zip aqui (ou o .xml de dentro dele). Só os ", shiny::em("artigos publicados"),
+                         " são lidos; você escolhe quais cadastrar.")),
+        shiny::div(class = "alert alert-warning small py-2", shiny::icon("user-shield"),
+          " Demonstração: o arquivo é lido na hora e não é guardado. Ficam gravados só os artigos que você cadastrar ",
+          "(título, ano, revista, ISSN). Não envie currículo de outra pessoa."),
+        shiny::fileInput(ns("xml"), NULL, accept = c(".zip", ".xml"), buttonLabel = "Escolher arquivo...",
+                         placeholder = "curriculo.zip ou curriculo.xml"),
+        shiny::uiOutput(ns("xml_info")),
+        DT::DTOutput(ns("xml_prev"), fill = FALSE),
+        shiny::uiOutput(ns("xml_botao")))
     )),
     shiny::uiOutput(ns("import_res")),
     bslib::card(
@@ -373,11 +383,50 @@ docente_server <- function(id, ctx, docente_id) {
                      error = function(e) { avisar(paste("CSV ilegível:", conditionMessage(e)), "error"); NULL })
       if (!is.null(df)) importar(df)
     })
-    shiny::observeEvent(input$xml_add, {
-      shiny::req(input$xml)
+    # ---- Lattes: le, mostra a previa e importa so os selecionados ----
+    lattes <- shiny::reactiveVal(NULL)
+    jan_max <- listar_janelas(sjr)
+    ano_ini_max <- min(jan_max$ano_ini)
+    shiny::observeEvent(input$xml, {
       df <- tryCatch(ler_lattes_xml(input$xml$datapath),
-                     error = function(e) { avisar(paste("XML ilegível:", conditionMessage(e)), "error"); NULL })
-      if (!is.null(df)) importar(df)
+                     error = function(e) { avisar(conditionMessage(e), "error"); NULL })
+      if (is.null(df)) return(lattes(NULL))
+      prev <- previsualizar_artigos(sjr, df, n_anos = max(jan_max$n_anos))
+      attr(prev, "docente") <- attr(df, "docente")
+      lattes(prev)
+    })
+    output$xml_info <- shiny::renderUI({
+      d <- lattes(); shiny::req(d)
+      inf <- attr(d, "docente")
+      shiny::div(class = "small mb-2",
+        shiny::strong(if (nzchar(inf$nome)) inf$nome else "Currículo Lattes"),
+        if (nzchar(inf$lattes_id)) sprintf(" · ID Lattes %s", inf$lattes_id),
+        if (nzchar(inf$atualizado_em) && nchar(inf$atualizado_em) == 8)
+          sprintf(" · atualizado em %s/%s/%s", substr(inf$atualizado_em, 1, 2), substr(inf$atualizado_em, 3, 4),
+                  substr(inf$atualizado_em, 5, 8)),
+        shiny::br(),
+        sprintf("%d artigo(s) publicado(s) no currículo; %d encontrado(s) no SJR. ", nrow(d), sum(d$sjr != "não encontrada")),
+        sprintf("Pré-selecionados: os de %d em diante (a base SJR começa em %d). Clique nas linhas para mudar.",
+                ano_ini_max, ano_ini_max))
+    })
+    output$xml_prev <- DT::renderDT({
+      d <- lattes(); shiny::req(d)
+      sel <- which(suppressWarnings(as.integer(d$ano)) >= ano_ini_max)
+      df <- data.frame(`Título` = d$titulo, Ano = d$ano, `Revista (Lattes)` = d$revista,
+        ISSN = ifelse(nzchar(d$issn), fmt_issn(normalizar_issn(d$issn)), "–"),
+        `No SJR?` = d$sjr, `p máx. 2020–2025 (0–1)` = fmt_p(d$p), check.names = FALSE)
+      tabela_dt(df, selecao = list(mode = "multiple", selected = sel), pagina = 10)
+    })
+    output$xml_botao <- shiny::renderUI({
+      shiny::req(lattes())
+      n <- length(input$xml_prev_rows_selected)
+      shiny::actionButton(ns("xml_add"), sprintf("Cadastrar %d artigo(s) selecionado(s)", n),
+                          icon = shiny::icon("file-import"), class = "btn-primary mt-2")
+    })
+    shiny::observeEvent(input$xml_add, {
+      d <- lattes(); i <- input$xml_prev_rows_selected
+      if (is.null(d) || !length(i)) return(avisar("Selecione ao menos um artigo.", "warning"))
+      importar(d[i, c("titulo", "ano", "revista", "issn")])
     })
     shiny::observeEvent(input$art_del, {
       i <- input$tab_art_rows_selected

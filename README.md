@@ -2,7 +2,7 @@
 
 Aplicativo **R + Shiny** que aplica as regras do edital de credenciamento (Artigo X e Artigo Y) sobre o ranking **SJR**. É uma **demonstração**: todos os docentes, artigos e licenças são fictícios; as revistas e percentis são reais (Scimago).
 
-- **Docente:** solicitações e histórico, avaliação com medidor 0–4,0 e cartões dos artigos, período ampliado (Artigo Y), cadastro de artigos (manual, lista colada, CSV, XML do Lattes), buscador de revistas e "onde publicar".
+- **Docente:** solicitações e histórico, avaliação com medidor 0–4,0 e cartões dos artigos, período ampliado (Artigo Y), cadastro de artigos (manual, lista colada, CSV e o .zip/.xml exportado do Lattes, com prévia), buscador de revistas e "onde publicar".
 - **Comissão:** lista de todas as solicitações com filtros e situação (apto / quase apto / não apto), detalhe somente leitura, painel, exportação CSV e PDF.
 - **Regras e premissas:** parâmetros em uso e as decisões ainda pendentes.
 
@@ -78,33 +78,36 @@ source("R/testar_artigo_y.R")
 
 Roda os 25 testes do Artigo Y e, em seguida, `R/testar_app.R` (esquema e CRUD do app.db, chaves estrangeiras, duplicatas, fluxo de status, retrato imutável, Artigo Y a partir das licenças, revista ambígua e confirmação manual, importadores e semente). Termina com **TODOS OS TESTES PASSARAM**. Usa um app.db temporário; não mexe no da demo.
 
-## 6. Publicar a demo
+## 6. Publicar a demo (site público)
 
-O app precisa dos dois `.db` ao lado do `app.R`. Eles não estão no git: são gerados e enviados no deploy.
+### Automático, pelo GitHub (recomendado)
 
-### shinyapps.io
+O workflow [`.github/workflows/publicar.yml`](.github/workflows/publicar.yml) publica no **shinyapps.io** a cada push na `main` (ou em *Actions → Publicar demo → Run workflow*). Ele instala os pacotes, obtém o `banco_edital.db` (Knit dos `dados/*.csv`, se estiverem no repositório; senão baixa o `.db` do Drive pelo link compartilhado), roda os testes, semeia o `app.db` e publica.
 
-```r
-install.packages("rsconnect")
-rsconnect::setAccountInfo(name = "<conta>", token = "<token>", secret = "<secret>")  # painel do shinyapps.io > Tokens
-source("deploy.R")
-```
-
-`deploy.R` gera o `banco_edital.db` (se faltar), semeia o `app.db` (se faltar) e publica só os arquivos necessários (`app.R`, `R/*.R` do app e os dois bancos). As senhas continuam só no seu `~/.ppge/credenciais_demo.csv`.
+Uma vez só:
+1. Crie uma conta gratuita em <https://www.shinyapps.io> e escolha o nome da conta (vira o endereço `https://<conta>.shinyapps.io/ppge-credenciamento/`).
+2. No shinyapps.io: *Account → Tokens → Show → Show secret*.
+3. No GitHub: *Settings → Secrets and variables → Actions → New repository secret* e crie:
+   - `SHINYAPPS_ACCOUNT` (nome da conta), `SHINYAPPS_TOKEN`, `SHINYAPPS_SECRET`;
+   - `PPGE_SENHA_DEMO`: a senha (8+ caracteres) de todos os logins da demo (`comissao`, `docente01` … `docente15`).
+4. *Actions → Publicar demo → Run workflow*. O endereço aparece no resumo da execução.
 
 Observações:
-- No shinyapps.io o disco é temporário: o que os usuários gravarem no `app.db` volta ao estado semeado quando a instância reinicia. Para uma demo isso é suficiente.
-- O plano gratuito aceita o pacote de ~40 MB; se o upload ficar lento, gere o banco com `Rscript dev/gerar_banco_ficticio.R` só para testar o deploy.
+- No shinyapps.io o disco é temporário: o que for gravado no `app.db` volta ao estado semeado quando a instância reinicia ou a cada novo deploy. Para uma demo isso basta.
+- O arquivo do Lattes enviado é lido na hora e não é guardado; só os artigos cadastrados ficam no `app.db`.
 
-### Posit Connect
+### Manual, da sua máquina
 
 ```r
-rsconnect::addServer("https://<seu-connect>/", name = "connect")
-rsconnect::connectUser(server = "connect")
+rsconnect::setAccountInfo(name = "<conta>", token = "<token>", secret = "<secret>")
 source("deploy.R")
 ```
 
-No Connect o `app.db` também pode ficar num caminho persistente: defina `PPGE_APP_DB` nas variáveis de ambiente do conteúdo.
+`deploy.R` gera o `banco_edital.db` (se faltar), semeia o `app.db` (se faltar) e publica só os arquivos necessários. Para **Posit Connect**, troque o `setAccountInfo` por `rsconnect::addServer(...)` + `rsconnect::connectUser(...)`; lá dá para apontar `PPGE_APP_DB` para um caminho persistente.
+
+## 7. Usar com o seu currículo Lattes
+
+Em *Artigos → Currículo Lattes*: na Plataforma Lattes, *Exportar → XML* baixa um `.zip`; envie o `.zip` (ou o `curriculo.xml`). O app lê só os **artigos publicados**, mostra quais revistas estão no SJR e o p de cada uma, pré-seleciona os de 2020 em diante e cadastra os que você marcar. Depois, *Avaliação → Calcular avaliação agora*.
 
 ## Decisões pendentes (aparecem no app em "Regras e premissas")
 

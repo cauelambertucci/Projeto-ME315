@@ -28,5 +28,7 @@ rsconnect::deployApp(
   appFiles = arquivos,
   appName  = Sys.getenv("APP_NAME", "ppge-credenciamento"),
   appTitle = "Credenciamento Docente PPGE (demo)",
-  forceUpdate = TRUE
+  forceUpdate = TRUE,
+  launch.browser = FALSE,
+  lint = FALSE
 )

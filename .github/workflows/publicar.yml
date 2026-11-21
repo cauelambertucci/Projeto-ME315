@@ -1,0 +1,115 @@
+# Publica a demo no shinyapps.io a cada push na main (ou manualmente em Actions > Run workflow).
+#
+# Segredos do repositório (Settings > Secrets and variables > Actions > New repository secret):
+#   SHINYAPPS_ACCOUNT  nome da conta no shinyapps.io
+#   SHINYAPPS_TOKEN    token  (shinyapps.io > Account > Tokens > Show)
+#   SHINYAPPS_SECRET   secret (mesma tela)
+#   PPGE_SENHA_DEMO    senha (8+ caracteres) usada por todos os logins da demo
+#
+# O banco_edital.db NAO esta no git. Se dados/*.csv estiverem no repositorio, ele e
+# gerado pelo Knit do banco_edital.Rmd; senao, e baixado do Drive (link compartilhado).
+name: Publicar demo
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore: ["docs/**", "**.md"]
+
+concurrency:
+  group: publicar-demo
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  publicar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      BANCO_EDITAL_DRIVE_ID: 1vTkiAwa4cqzWkFP5N-nHuqZ5P9EI0sRW
+    steps:
+      - name: Conferir segredos
+        env:
+          A: ${{ secrets.SHINYAPPS_ACCOUNT }}
+          T: ${{ secrets.SHINYAPPS_TOKEN }}
+          S: ${{ secrets.SHINYAPPS_SECRET }}
+          P: ${{ secrets.PPGE_SENHA_DEMO }}
+        run: |
+          falta=""
+          [ -n "$A" ] || falta="$falta SHINYAPPS_ACCOUNT"
+          [ -n "$T" ] || falta="$falta SHINYAPPS_TOKEN"
+          [ -n "$S" ] || falta="$falta SHINYAPPS_SECRET"
+          [ -n "$P" ] || falta="$falta PPGE_SENHA_DEMO"
+          if [ -n "$falta" ]; then
+            echo "::error::Faltam segredos do repositório:$falta (veja o README, seção Publicar)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::shiny
+            any::bslib
+            any::DT
+            any::shinymanager
+            any::DBI
+            any::RSQLite
+            any::jsonlite
+            any::scrypt
+            any::ggplot2
+            any::gridExtra
+            any::xml2
+            any::stringi
+            any::bit64
+            any::readr
+            any::dplyr
+            any::knitr
+            any::rmarkdown
+            any::rsconnect
+
+      - name: Obter banco_edital.db
+        run: |
+          if [ -f dados/revista.csv ] && [ -f dados/issn.csv ] && [ -f dados/percentil.csv ]; then
+            echo "Gerando pelo Knit do banco_edital.Rmd"
+            Rscript -e 'rmarkdown::render("banco_edital.Rmd", quiet = TRUE)'
+          else
+            echo "Baixando do Drive"
+            curl -sSL --fail --retry 3 -o banco_edital.db \
+              "https://drive.usercontent.google.com/download?id=${BANCO_EDITAL_DRIVE_ID}&export=download&confirm=t"
+          fi
+          if ! head -c 15 banco_edital.db | grep -q "SQLite format 3"; then
+            echo "::error::banco_edital.db inválido. Confira o compartilhamento por link no Drive ou suba dados/*.csv."
+            exit 1
+          fi
+          ls -lh banco_edital.db
+
+      - name: Testes
+        run: Rscript -e 'source("R/testar_artigo_y.R")'
+
+      - name: Semear app.db (docentes fictícios)
+        env:
+          PPGE_SENHA_DEMO: ${{ secrets.PPGE_SENHA_DEMO }}
+          PPGE_CREDENCIAIS: ${{ runner.temp }}/credenciais.csv
+        run: Rscript R/semear_demo.R --forcar
+
+      - name: Publicar no shinyapps.io
+        env:
+          SHINYAPPS_ACCOUNT: ${{ secrets.SHINYAPPS_ACCOUNT }}
+          SHINYAPPS_TOKEN: ${{ secrets.SHINYAPPS_TOKEN }}
+          SHINYAPPS_SECRET: ${{ secrets.SHINYAPPS_SECRET }}
+        run: |
+          Rscript -e 'rsconnect::setAccountInfo(Sys.getenv("SHINYAPPS_ACCOUNT"), Sys.getenv("SHINYAPPS_TOKEN"), Sys.getenv("SHINYAPPS_SECRET"))'
+          Rscript deploy.R
+          echo "### Demo publicada: https://${SHINYAPPS_ACCOUNT}.shinyapps.io/ppge-credenciamento/" >> "$GITHUB_STEP_SUMMARY"

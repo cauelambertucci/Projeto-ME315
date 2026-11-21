@@ -199,6 +199,67 @@ local({
   chk("XML do Lattes vira o contrato titulo/ano/revista/issn",
       identical(names(lx), c("titulo", "ano", "revista", "issn")) && lx$titulo == "Artigo Lattes" && lx$ano == "2023")
 
+  message("Currículo Lattes no formato real (.zip, ISO-8859-1)")
+  rv_l <- dbGetQuery(sjr, "SELECT v.titulo, MIN(i.issn) AS issn, v.p FROM v_docente v JOIN issn i ON i.sourceid = v.sourceid
+                           WHERE v.p >= 0.5 AND v.titulo_norm IN (SELECT titulo_norm FROM revista GROUP BY titulo_norm HAVING COUNT(*) = 1)
+                             AND i.issn IN (SELECT issn FROM issn GROUP BY issn HAVING COUNT(DISTINCT sourceid) = 1)
+                           GROUP BY v.sourceid ORDER BY v.p DESC LIMIT 2")
+  art_xml <- function(seq, tit, ano, rev, issn) sprintf(paste0(
+    '<ARTIGO-PUBLICADO SEQUENCIA-PRODUCAO="%d" ORDEM-IMPORTANCIA="">',
+    '<DADOS-BASICOS-DO-ARTIGO NATUREZA="COMPLETO" TITULO-DO-ARTIGO="%s" ANO-DO-ARTIGO="%s" PAIS-DE-PUBLICACAO="Brasil" ',
+    'IDIOMA="Português" MEIO-DE-DIVULGACAO="DIGITAL" HOME-PAGE-DO-TRABALHO="" FLAG-RELEVANCIA="NAO" DOI="10.0000/fict.%d" ',
+    'TITULO-DO-ARTIGO-INGLES="" FLAG-DIVULGACAO-CIENTIFICA="NAO"/>',
+    '<DETALHAMENTO-DO-ARTIGO TITULO-DO-PERIODICO-OU-REVISTA="%s" ISSN="%s" VOLUME="12" FASCICULO="3" SERIE="" ',
+    'PAGINA-INICIAL="1" PAGINA-FINAL="20" LOCAL-DE-PUBLICACAO=""/>',
+    '<AUTORES NOME-COMPLETO-DO-AUTOR="Pessoa Fictícia" NOME-PARA-CITACAO="FICTICIA, P." ORDEM-DE-AUTORIA="1" NRO-ID-CNPQ=""/>',
+    '<PALAVRAS-CHAVE PALAVRA-CHAVE-1="estatística"/></ARTIGO-PUBLICADO>'), seq, tit, ano, seq, rev, issn)
+  xml_txt <- paste0(
+    '<?xml version="1.0" encoding="ISO-8859-1" standalone="no" ?>\n',
+    '<CURRICULO-VITAE SISTEMA-ORIGEM-XML="LATTES_OFFLINE" NUMERO-IDENTIFICADOR="0000000000000000" ',
+    'DATA-ATUALIZACAO="10112026" HORA-ATUALIZACAO="101500">',
+    '<DADOS-GERAIS NOME-COMPLETO="Pessoa Fictícia de Teste" NOME-EM-CITACOES-BIBLIOGRAFICAS="FICTICIA, P." ',
+    'NACIONALIDADE="B" PAIS-DE-NASCIMENTO="Brasil"/>',
+    '<PRODUCAO-BIBLIOGRAFICA><ARTIGOS-PUBLICADOS>',
+    art_xml(1, "Estimação em séries com ruído &amp; tendência", 2024, rv_l$titulo[1], ""),
+    art_xml(2, "Um artigo  com espaços\n duplos", 2021, "nome diferente da revista", rv_l$issn[2]),
+    art_xml(3, "Artigo antigo", 2012, rv_l$titulo[1], ""),
+    art_xml(4, "Artigo em revista fora do SJR", 2023, "Boletim Inexistente", "99999999"),
+    '</ARTIGOS-PUBLICADOS><ARTIGOS-ACEITOS-PARA-PUBLICACAO><ARTIGO-ACEITO-PARA-PUBLICACAO SEQUENCIA-PRODUCAO="9">',
+    '<DADOS-BASICOS-DO-ARTIGO TITULO-DO-ARTIGO="Aceito, ainda não publicado" ANO-DO-ARTIGO="2026"/>',
+    '<DETALHAMENTO-DO-ARTIGO TITULO-DO-PERIODICO-OU-REVISTA="X" ISSN="12345678"/>',
+    '</ARTIGO-ACEITO-PARA-PUBLICACAO></ARTIGOS-ACEITOS-PARA-PUBLICACAO></PRODUCAO-BIBLIOGRAFICA></CURRICULO-VITAE>')
+  dir_l <- tempfile("lattes_teste_"); dir.create(dir_l)
+  xml_l <- file.path(dir_l, "curriculo.xml")
+  writeBin(iconv(xml_txt, "UTF-8", "latin1", toRaw = TRUE)[[1]], xml_l)
+  lx2 <- ler_lattes_xml(xml_l)
+  chk("Lattes ISO-8859-1: lê só ARTIGO-PUBLICADO (aceitos ficam de fora)", nrow(lx2) == 4)
+  chk("Lattes: acentos e & preservados, espaços normalizados",
+      lx2$titulo[1] == "Estimação em séries com ruído & tendência" && lx2$titulo[2] == "Um artigo com espaços duplos")
+  chk("Lattes: nome e ID do currículo lidos", attr(lx2, "docente")$nome == "Pessoa Fictícia de Teste" &&
+      attr(lx2, "docente")$lattes_id == "0000000000000000")
+  zip_l <- file.path(dir_l, "curriculo.zip")
+  old_wd <- setwd(dir_l)
+  zip_ok <- tryCatch(utils::zip("curriculo.zip", "curriculo.xml", flags = "-q") == 0,
+                     error = function(e) FALSE, warning = function(w) FALSE)
+  setwd(old_wd)
+  if (isTRUE(zip_ok) && file.exists(zip_l)) {
+    chk("Lattes: aceita o .zip baixado da plataforma", identical(ler_lattes_xml(zip_l)$titulo, lx2$titulo))
+  } else message("  (sem utilitário zip nesta máquina: teste do .zip pulado)")
+  chk("arquivo que não é Lattes dá erro claro", {
+    f <- tempfile(fileext = ".xml"); writeLines("<outra/>", f)
+    grepl("currículo Lattes", tryCatch(ler_lattes_xml(f), error = conditionMessage))
+  })
+  pv <- previsualizar_artigos(sjr, lx2, n_anos = 6)
+  chk("prévia: casa por título e por ISSN, e marca revista fora do SJR",
+      pv$sjr[1] == "sim (título)" && pv$sjr[2] == "sim (ISSN)" && pv$sjr[4] == "não encontrada" && !is.na(pv$p[1]))
+  s5 <- criar_solicitacao(app, d1, 2025)
+  ri <- adicionar_artigos(app, s5, lx2)
+  r5 <- avaliar_solicitacao(app, sjr, s5)
+  chk("Lattes importado e avaliado: 2012 fora do período, revista inexistente sem_match",
+      ri$inseridos == 4 && r5$detalhe$situacao[r5$detalhe$ano == 2012] == "fora_do_periodo" &&
+      r5$detalhe$metodo[r5$detalhe$ano == 2023] == "sem_match")
+  unlink(dir_l, recursive = TRUE)
+
   message("Semente da demonstração")
   app2 <- abrir_app_db(":memory:")
   cred <- tempfile(fileext = ".csv")
