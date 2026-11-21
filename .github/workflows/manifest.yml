@@ -55,7 +55,7 @@ jobs:
         run: |
           Rscript -e '
             arquivos <- c("app.R", "banco_edital.Rmd", list.files("R", pattern = "\\.R$", full.names = TRUE))
-            rsconnect::writeManifest(appDir = ".", appFiles = arquivos, appPrimaryDoc = "app.R")
+            rsconnect::writeManifest(appDir = ".", appFiles = arquivos)
           '
           head -c 400 manifest.json
 
