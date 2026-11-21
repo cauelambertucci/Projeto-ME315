@@ -21,7 +21,7 @@ if (!file.exists("app.db")) source("R/semear_demo.R", encoding = "UTF-8")
 
 arquivos <- c("app.R", "banco_edital.db", "app.db",
               list.files("R", pattern = "\\.R$", full.names = TRUE))
-arquivos <- setdiff(arquivos, c("R/semear_demo.R", "R/testar_artigo_y.R", "R/testar_app.R"))
+arquivos <- setdiff(arquivos, c("R/testar_artigo_y.R", "R/testar_app.R"))
 
 rsconnect::deployApp(
   appDir   = ".",

@@ -16,10 +16,11 @@ suppressPackageStartupMessages({
 })
 
 for (f in c("funcoes_banco", "periodo_artigo_y", "modulo_periodo", "banco_app", "importar_artigos",
-            "ui_componentes", "mod_avaliacao", "mod_docente", "mod_revistas", "mod_regras", "mod_comissao")) {
+            "ui_componentes", "mod_avaliacao", "mod_docente", "mod_revistas", "mod_regras", "mod_comissao", "bootstrap")) {
   source(file.path("R", paste0(f, ".R")), encoding = "UTF-8", local = FALSE)
 }
 
+preparar_bancos()   # servidor novo: obtem banco_edital.db e semeia app.db (R/bootstrap.R)
 ARQ_BANCO_EDITAL <- Sys.getenv("PPGE_BANCO_EDITAL", "banco_edital.db")
 
 # Login: confere usuario/senha no app.db (hash scrypt). Conexao curta, so leitura do usuario.

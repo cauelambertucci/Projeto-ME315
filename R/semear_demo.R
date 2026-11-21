@@ -105,6 +105,7 @@ semear_demo <- function(app, sjr, credenciais = caminho_credenciais(), semente =
   # PPGE_SENHA_DEMO (ex.: segredo do GitHub Actions) = mesma senha para todos os logins
   senha_unica <- Sys.getenv("PPGE_SENHA_DEMO", "")
   if (nzchar(senha_unica) && nchar(senha_unica) < 8) stop("PPGE_SENHA_DEMO precisa de 8+ caracteres.")
+  hash_unico <- if (nzchar(senha_unica)) scrypt::hashPassword(senha_unica) else NULL
   senha_de <- function(login) {
     if (nzchar(senha_unica)) return(senha_unica)
     s <- cred$senha[cred$login == login]
@@ -123,13 +124,13 @@ semear_demo <- function(app, sjr, credenciais = caminho_credenciais(), semente =
   ids <- list(); logins <- list()
   dbWithTransaction(app, {
     s_com <- senha_de("comissao")
-    criar_usuario(app, "comissao", s_com, "comissao")
+    criar_usuario(app, "comissao", s_com, "comissao", hash = hash_unico)
     logins$comissao <- c(s_com, "comissao")
     for (i in seq_len(nrow(DOCENTES_FICTICIOS))) {
       d <- DOCENTES_FICTICIOS[i, ]
       ids[[d$login]] <- criar_docente(app, d$nome, d$area)
       s <- senha_de(d$login)
-      criar_usuario(app, d$login, s, "docente", ids[[d$login]])
+      criar_usuario(app, d$login, s, "docente", ids[[d$login]], hash = hash_unico)
       logins[[d$login]] <- c(s, "docente")
     }
   })

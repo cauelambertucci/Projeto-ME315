@@ -168,10 +168,12 @@ excluir_docente <- function(con, id) {
 # ---------------------------------------------------------------------
 # USUARIO (senha guardada so como hash scrypt)
 # ---------------------------------------------------------------------
-criar_usuario <- function(con, login, senha, papel, docente_id = NA) {
+# hash: opcional, para reaproveitar um hash ja calculado (scrypt e lento de proposito)
+criar_usuario <- function(con, login, senha, papel, docente_id = NA, hash = NULL) {
   if (nchar(senha) < 8) stop("A senha precisa de pelo menos 8 caracteres.")
+  if (is.null(hash)) hash <- scrypt::hashPassword(senha)
   inserir(con, "INSERT INTO usuario (login, senha_hash, papel, docente_id) VALUES (?, ?, ?, ?)",
-          list(login, scrypt::hashPassword(senha), papel,
+          list(login, hash, papel,
                if (is.na(docente_id)) NA_integer_ else docente_id))
 }
 # Devolve a linha do usuario (sem o hash) se login e senha conferem; senao NULL.

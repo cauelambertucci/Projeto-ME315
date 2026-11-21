@@ -1,4 +1,5 @@
-# Publica a demo no shinyapps.io a cada push na main (ou manualmente em Actions > Run workflow).
+# Publica a demo no shinyapps.io (opcional; para o Posit Connect Cloud veja o README).
+# Roda manualmente: Actions > Publicar demo > Run workflow.
 #
 # Segredos do repositório (Settings > Secrets and variables > Actions > New repository secret):
 #   SHINYAPPS_ACCOUNT  nome da conta no shinyapps.io
@@ -12,9 +13,6 @@ name: Publicar demo
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths-ignore: ["docs/**", "**.md"]
 
 concurrency:
   group: publicar-demo

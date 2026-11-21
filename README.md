@@ -80,9 +80,20 @@ Roda os 25 testes do Artigo Y e, em seguida, `R/testar_app.R` (esquema e CRUD do
 
 ## 6. Publicar a demo (site público)
 
-### Automático, pelo GitHub (recomendado)
+### Posit Connect Cloud (recomendado)
 
-O workflow [`.github/workflows/publicar.yml`](.github/workflows/publicar.yml) publica no **shinyapps.io** a cada push na `main` (ou em *Actions → Publicar demo → Run workflow*). Ele instala os pacotes, obtém o `banco_edital.db` (Knit dos `dados/*.csv`, se estiverem no repositório; senão baixa o `.db` do Drive pelo link compartilhado), roda os testes, semeia o `app.db` e publica.
+Publica direto do GitHub. Ao iniciar num servidor novo, o app prepara os bancos sozinho (`R/bootstrap.R`): baixa o `banco_edital.db` do Drive (ou faz o Knit, se `dados/*.csv` estiverem no repositório) e cria os docentes fictícios. O `manifest.json` (pacotes e versões, exigido pelo Connect Cloud) é gerado e commitado pelo workflow *Gerar manifest* a cada mudança no código.
+
+1. Em <https://connect.posit.cloud>, entre com a conta do GitHub e clique em **Publish → From GitHub → Shiny**.
+2. Repositório `cauelambertucci/Projeto-ME315`, branch `main`, arquivo principal `app.R`.
+3. Em **Advanced settings → Configure variables**, adicione `PPGE_SENHA_DEMO` (8+ caracteres) marcada como **secret**: é a senha de todos os logins (`comissao`, `docente01` … `docente15`).
+4. **Publish**. A primeira abertura leva ~1 minuto (download do banco). O endereço fica em `https://connect.posit.cloud/...` e pode ser compartilhado.
+
+No plano gratuito o repositório precisa ser **público**. O disco é temporário: o que for gravado volta ao estado semeado quando o app reinicia.
+
+### shinyapps.io, pelo GitHub Actions
+
+O workflow [`.github/workflows/publicar.yml`](.github/workflows/publicar.yml) publica no **shinyapps.io** quando você roda *Actions → Publicar demo → Run workflow*. Ele instala os pacotes, obtém o `banco_edital.db` (Knit dos `dados/*.csv`, se estiverem no repositório; senão baixa o `.db` do Drive pelo link compartilhado), roda os testes, semeia o `app.db` e publica.
 
 Uma vez só:
 1. Crie uma conta gratuita em <https://www.shinyapps.io> e escolha o nome da conta (vira o endereço `https://<conta>.shinyapps.io/ppge-credenciamento/`).
