@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["app.R", "R/**", "banco_edital.Rmd", ".github/workflows/testes.yml"]
+    paths: ["app.R", "R/**", ".github/workflows/testes.yml"]
 
 permissions:
   contents: read
@@ -33,12 +33,8 @@ jobs:
             any::RSQLite
             any::xml2
             any::stringi
-            any::bit64
-            any::readr
-            any::dplyr
-            any::knitr
       - name: Obter banco_edital.db
-        run: Rscript -e 'source("R/bootstrap.R"); preparar_banco()' && ls -lh banco_edital.db
+        run: Rscript -e 'source("R/baixar_banco.R"); baixar_banco()' && ls -lh banco_edital.db
       - name: Testes
         run: Rscript -e 'source("R/testar_artigo_y.R")'
       - name: App inicia

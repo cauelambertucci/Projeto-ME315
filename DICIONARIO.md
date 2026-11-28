@@ -1,6 +1,6 @@
 # Dicionário dos bancos (ME315)
 
-Um banco SQLite, `banco_edital.db` (SJR + regras do edital), aberto **somente leitura** com `conectar_banco()`. Não é versionado: é gerado pelo Knit do `banco_edital.Rmd` ou baixado do Drive pelo `R/bootstrap.R`.
+Um banco SQLite, `banco_edital.db` (SJR + regras do edital), aberto **somente leitura** com `conectar_banco()`. Não é versionado: é gerado pelo Knit do `banco_edital.Rmd` ou baixado do Drive pelo `R/baixar_banco.R`.
 
 ---
 
@@ -115,12 +115,14 @@ Parentalidade +2 anos **por licença**; PcD +1 ano (uma vez); licença médica +
 
 ---
 
-## Parte 2 — O app (sem banco próprio)
+## Parte 2 — O app
 
-O app não grava nada: não há login nem banco de credenciamento. O fluxo é todo em memória:
+O app não grava nada. Fluxo:
 
-1. `ler_lattes_xml(caminho)` (`R/importar_artigos.R`) abre o `.zip` ou `.xml` da Plataforma Lattes (ISO-8859-1), lê só `PRODUCAO-BIBLIOGRAFICA/ARTIGOS-PUBLICADOS/ARTIGO-PUBLICADO` e devolve o contrato `titulo, ano, revista, issn` (com `attr(, "docente")`: nome, ID Lattes, data de atualização). Tolera `&` sem escape.
-2. `previsualizar_artigos(con, df, n_anos)` mostra, para cada artigo, se a revista foi achada no SJR (ISSN, depois título) e o p.
-3. `avaliar_lattes(con, artigos, n_parentalidade, pcd, meses_medica, sourceid_conf)` (`R/avaliacao.R`) calcula a janela com `calcular_periodo()`, chama `avaliar_artigos()` (via `avaliar_artigos_app()`, que respeita a revista escolhida pelo docente) e devolve `periodo`, `resumo`, `detalhe` por artigo (com `revista_sjr`, `ano_percentil_max`, `motivo`, `explicacao`) e as notas por área.
-
-**Revista ambígua:** quando `n_candidatos > 1`, o resultado mostra um seletor; a escolha vira `sourceid_conf` e o artigo passa a ser casado pelo método `manual` (prioridade sobre ISSN e título). Decisão pendente, sinalizada em "Regras e premissas".
+1. `ler_lattes(caminho)` (`R/lattes.R`) lê os artigos publicados do currículo (`.zip` ou `.xml`) e devolve `titulo, ano, revista, issn`.
+2. `periodo_server()` calcula a janela do Artigo Y (`calcular_periodo()`).
+3. `avaliar_lattes(con, artigos, n_anos)` (`R/ranking.R`) chama `avaliar_artigos()` e acrescenta, para cada revista:
+   - `rank_area` de `n_area`: posição na melhor área, no ano do maior percentil (tabela `percentil`);
+   - `rank_global`: posição entre todas as revistas classificadas na janela, ordenadas por `p` e, no empate, pelo maior SJR da janela;
+   - `motivo`: por que o artigo entra ou não na soma.
+4. `ranking_revistas(con, n_anos, area)` monta o ranking global (`area = ""`) ou o ranking de uma área (`nota_revista_area`, desempate pelo SJR).

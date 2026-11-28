@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["app.R", "R/**", "banco_edital.Rmd", ".github/workflows/manifest.yml"]
+    paths: ["app.R", "R/**", ".github/workflows/manifest.yml"]
 
 concurrency:
   group: manifest
@@ -40,21 +40,13 @@ jobs:
             any::RSQLite
             any::xml2
             any::stringi
-            any::bit64
-            any::readr
-            any::dplyr
-            any::knitr
-            any::rmarkdown
             any::rsconnect
-            any::cpp11
-            any::progress
-            any::dbplyr
 
       - name: Escrever manifest.json
         run: |
           Rscript -e '
-            arquivos <- c("app.R", "banco_edital.Rmd", list.files("R", pattern = "\\.R$", full.names = TRUE))
-            arquivos <- setdiff(arquivos, c("R/testar_artigo_y.R", "R/testar_app.R"))
+            arquivos <- c("app.R", list.files("R", pattern = "\\.R$", full.names = TRUE))
+            arquivos <- setdiff(arquivos, c("R/testar_artigo_y.R", "R/testar_lattes.R"))
             rsconnect::writeManifest(appDir = ".", appFiles = arquivos)
           '
           python3 .github/corrigir_manifest.py
