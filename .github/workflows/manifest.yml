@@ -41,6 +41,7 @@ jobs:
             any::xml2
             any::stringi
             any::rsconnect
+            any::cpp11
 
       - name: Escrever manifest.json
         run: |
